@@ -34,6 +34,7 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  border-radius: 20px;
 }
 .menu-toggle {
   position: absolute;
@@ -44,6 +45,7 @@
   border:none;
   font-size: 20px;
   color: #f2f2f7;
+  border-radius: 20px;
 }
 .logo {
   font-size: 17px;
@@ -85,7 +87,7 @@ nav ul { display: none; }
 nav ul.show {
   display: flex;
   flex-direction: column;
-  background: rgba(255,255,255,1.9);
+  background: rgba(255,255,255,1);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   position: absolute;
@@ -95,6 +97,7 @@ nav ul.show {
   padding: 1rem;
   gap: 1rem;
   z-index: 999;
+  border-radius: 20px;
 }
 
 main { padding-top: calc(44px + env(safe-area-inset-top) + 1rem); }
@@ -243,6 +246,9 @@ footer {
    que contrastaría mal con el fondo oscuro del nav mobile. */
 /* Si quieres que el color sea azul en mobile, puedes poner esta regla FUERA del media query */
 /* #nav-list li a { color: #1e90ff; text-decoration: none; } */
+#nav-list {
+  color: blue;
+}
 
 .chat-img, img{
   border-radius: 20px;
