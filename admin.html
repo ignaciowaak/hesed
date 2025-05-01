@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin - Llamadas</title>
+</head>
+<body>
+  <h2>Administrador</h2>
+  <ul id="queue"></ul>
+  <audio id="remoteAudio" controls autoplay></audio>  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getDatabase, ref, onChildAdded, get, set, push, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+    // Configuración Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyA_USvfSXAqZf7hQhJCon0WulnrrINB7cI",
+      authDomain: "the-pic-c437e.firebaseapp.com",
+      databaseURL: "https://the-pic-c437e-default-rtdb.firebaseio.com",
+      projectId: "the-pic-c437e",
+      storageBucket: "the-pic-c437e.appspot.com",
+      messagingSenderId: "750954597180",
+      appId: "1:750954597180:web:d7b67c6b60f4d3bb17ec39"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const iceConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+    let inCall = false;
+    onChildAdded(ref(db, 'calls'), snap => {
+      const data = snap.val();
+      if (!inCall && data.status === 'waiting') {
+        const li = document.createElement('li');
+        li.id = snap.key;
+        li.innerHTML = `User: ${snap.key} <button>Atender</button>`;
+        li.querySelector('button').onclick = () => acceptCall(snap.key);
+        document.getElementById('queue').appendChild(li);
+      }
+    });
+
+    async function acceptCall(callId) {
+      inCall = true;
+      const pc = new RTCPeerConnection(iceConfig);
+      const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const remoteStream = new MediaStream();
+      const remoteAudio = document.getElementById('remoteAudio');
+      remoteAudio.srcObject = remoteStream;
+
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      pc.ontrack = event => {
+        remoteStream.addTrack(event.track);
+        remoteAudio.play().catch(() => {});
+      };
+
+      pc.onicecandidate = event => {
+        if (event.candidate) push(ref(db, `calls/${callId}/adminCandidates`), event.candidate.toJSON());
+      };
+
+      // Obtener oferta
+      const offerSnap = await get(ref(db, `calls/${callId}/offer`));
+      await pc.setRemoteDescription(new RTCSessionDescription(offerSnap.val()));
+
+      // Crear y enviar respuesta
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await set(ref(db, `calls/${callId}/answer`), answer);
+
+      // Escuchar candidatos del caller
+      onValue(ref(db, `calls/${callId}/callerCandidates`), snap => snap.forEach(child => pc.addIceCandidate(new RTCIceCandidate(child.val()))));
+
+      // Marcar en progreso
+      await set(ref(db, `calls/${callId}`), { status: 'in-progress' });
+    }
+  </script></body>
+</html>

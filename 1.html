@@ -1,0 +1,119 @@
+<!-- user.html: Interfaz para usuario que necesita ayuda --><!DOCTYPE html><html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Solicitud de Ayuda</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { font-family: sans-serif; margin: 2rem; background: #f5f5f9; }
+    h2 { color: #007AFF; }
+    button { display: block; width: 100%; max-width: 300px; margin: 1rem 0; padding: .75rem; border: none; border-radius: 8px; background: #007AFF; color: #fff; font-size: 1rem; cursor: pointer; }
+    input, select { width: 100%; max-width: 300px; padding: .5rem; margin: .5rem 0; border: 1px solid #ccc; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <h2>Necesitas ayuda?</h2>
+  <p>Selecciona el tipo de asistencia:</p>
+  <select id="requestType">
+    <option value="chat">Chat de Emergencia</option>
+    <option value="call">Llamada de Emergencia</option>
+  </select>
+  <input type="text" id="userName" placeholder="Tu nombre (opcional)">
+  <button id="btnRequest">Enviar Solicitud</button>  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+    import { getDatabase, ref, push, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA_USvfSXAqZf7hQhJCon0WulnrrINB7cI",
+      authDomain: "the-pic-c437e.firebaseapp.com",
+      databaseURL: "https://the-pic-c437e-default-rtdb.firebaseio.com",
+      projectId: "the-pic-c437e",
+      storageBucket: "the-pic-c437e.appspot.com",
+      messagingSenderId: "750954597180",
+      appId: "1:750954597180:web:d7b67c6b60f4d3bb17ec39"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    document.getElementById('btnRequest').onclick = async () => {
+      const type = document.getElementById('requestType').value;
+      const name = document.getElementById('userName').value.trim();
+      let lat = null, lng = null;
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+          send(type, name, lat, lng);
+        }, () => send(type, name, null, null));
+      } else {
+        send(type, name, null, null);
+      }
+    };
+
+    function send(type, name, lat, lng) {
+      push(ref(db, 'requests'), {
+        type,
+        name: name || 'Anónimo',
+        lat,
+        lng,
+        userAgent: navigator.userAgent,
+        timestamp: serverTimestamp()
+      });
+      alert('Solicitud enviada. Espera respuesta.');
+    }
+  </script></body>
+</html><!-- admin.html: Panel para administrar solicitudes --><!DOCTYPE html><html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Panel de Admin</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body { font-family: sans-serif; margin: 2rem; background: #fff; }
+    h2 { color: #007AFF; }
+    ul { list-style: none; padding: 0; }
+    li { background: #f1f1f1; margin: .5rem 0; padding: .75rem; border-radius: 5px; }
+    button { margin-top: .5rem; padding: .5rem 1rem; border: none; border-radius: 5px; background: #4CAF50; color: #fff; cursor: pointer; }
+    .info { font-size: .9rem; color: #555; }
+  </style>
+</head>
+<body>
+  <h2>Solicitudes de Ayuda</h2>
+  <ul id="list"></ul>  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+    import { getDatabase, ref, onChildAdded, remove } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA_USvfSXAqZf7hQhJCon0WulnrrINB7cI",
+      authDomain: "the-pic-c437e.firebaseapp.com",
+      databaseURL: "https://the-pic-c437e-default-rtdb.firebaseio.com",
+      projectId: "the-pic-c437e",
+      storageBucket: "the-pic-c437e.appspot.com",
+      messagingSenderId: "750954597180",
+      appId: "1:750954597180:web:d7b67c6b60f4d3bb17ec39"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const listEl = document.getElementById('list');
+    onChildAdded(ref(db, 'requests'), snap => {
+      const data = snap.val();
+      const key = snap.key;
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <strong>Tipo:</strong> ${data.type}<br>
+        <span class="info">Usuario: ${data.name}</span><br>
+        <span class="info">Ubicación: ${data.lat || '-'}, ${data.lng || '-'}</span><br>
+        <span class="info">Navegador: ${data.userAgent}</span><br>
+        <button data-key="${key}" onclick="handle('${key}', '${data.type}')">Atender</button>
+      `;
+      listEl.append(li);
+    });
+
+    function handle(key, type) {
+      // Abrir chat o llamada
+      const url = type === 'chat' ? 'chat.html?room=' + key : 'call.html?room=' + key;
+      window.open(url, '_blank');
+      // Eliminar solicitud
+      remove(ref(db, 'requests/' + key));
+    }
+  </script></body>
+</html>

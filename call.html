@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Usuario - Llamada 1 a 1</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    :root {
+      --primary-color: #007aff;
+      --accent-color: #5ac8fa;
+      --bg-gradient: linear-gradient(135deg, #1c1c1e, #2c2c2e);
+      --message-bg: rgba(255,255,255,0.3);
+      --message-radius: 14px;
+      --message-padding: 12px 16px;
+      --message-font: 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: var(--bg-gradient) fixed no-repeat center/cover;
+      color: #f2f2f7;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      line-height: 1.6;
+    }
+
+    /* ­————— Rotador de frases estilo iOS ————— */
+    #anxietyMessage {
+      position: fixed;
+      top: calc(20px + env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 320px;
+      width: 90%;
+      background: var(--message-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: var(--message-radius);
+      padding: var(--message-padding);
+      font: var(--message-font);
+      text-align: center;
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
+      z-index: 1000;
+    }
+
+    /* ­————— Botón y audio (tu CSS existente adaptado) ————— */
+    h2 {
+      margin-bottom: 1.5rem;
+      font-size: 1.5rem;
+    }
+    #startCall {
+      display: block;
+      margin: 0 auto;
+      background: var(--primary-color);
+      color: #fff;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #startCall:hover {
+      background: var(--accent-color);
+    }
+    #status {
+      margin-top: 0.75rem;
+      font-weight: bold;
+      color: #d1d1d6;
+    }
+    #remoteAudio {
+      display: block;
+      width: 160px;
+      margin: 1rem auto 0 auto;
+      transform: scale(0.85);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Componente de frases -->
+  <div id="anxietyMessage"></div>
+
+  <h2>No estas solo estamos con vos</h2>
+  <button id="startCall">Iniciar llamada</button>
+  <p id="status">Esperando...</p>
+  <audio id="remoteAudio" controls autoplay></audio>
+
+  <!-- Script para rotar frases sin solaparlas -->
+  <script>
+    (function() {
+      const messages = [
+        'Respira hondo… estás en un espacio seguro.',
+        'Concéntrate en el ritmo de tu respiración.',
+        'Permítete soltar lo que no puedes controlar.',
+        'Esto pasará. Un momento a la vez.'
+      ];
+      const display = document.getElementById('anxietyMessage');
+      let idx = 0;
+
+      function showNext() {
+        // Fade out
+        display.style.opacity = '0';
+        setTimeout(() => {
+          // Cambiar texto y fade in
+          display.textContent = messages[idx];
+          display.style.opacity = '1';
+          // Preparar siguiente índice
+          idx = (idx + 1) % messages.length;
+        }, 1000); // coincide con transition de 1s
+      }
+
+      // Mostrar primera frase inmediatamente
+      display.textContent = messages[0];
+      display.style.opacity = '1';
+      idx = 1;
+
+      // Cambiar cada 6 segundos (4s visible + 1s fade out + 1s fade in)
+      setInterval(showNext, 6000);
+    })();
+  </script>
+
+  <!-- Tu script original de WebRTC / Firebase sin alterar -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getDatabase, ref, push, set, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+    // Configuración Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyA_USvfSXAqZf7hQhJCon0WulnrrINB7cI",
+      authDomain: "the-pic-c437e.firebaseapp.com",
+      databaseURL: "https://the-pic-c437e-default-rtdb.firebaseio.com",
+      projectId: "the-pic-c437e",
+      storageBucket: "the-pic-c437e.appspot.com",
+      messagingSenderId: "750954597180",
+      appId: "1:750954597180:web:d7b67c6b60f4d3bb17ec39"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const iceConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+    let pc, localStream, callRef;
+
+    document.getElementById('startCall').onclick = async () => {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      pc = new RTCPeerConnection(iceConfig);
+      const remoteStream = new MediaStream();
+      const remoteAudio = document.getElementById('remoteAudio');
+      remoteAudio.srcObject = remoteStream;
+
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      pc.ontrack = event => {
+        remoteStream.addTrack(event.track);
+        remoteAudio.play().catch(() => {});
+      };
+
+      pc.onicecandidate = event => {
+        if (event.candidate) push(ref(db, `calls/${callRef.key}/callerCandidates`), event.candidate.toJSON());
+      };
+
+      // Crear llamada
+      callRef = push(ref(db, 'calls'));
+      await set(callRef, { status: 'waiting' });
+      onDisconnect(callRef).remove();
+
+      // Crear y enviar oferta
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await set(ref(db, `calls/${callRef.key}/offer`), offer);
+      document.getElementById('status').innerText = 'Esperando admin...';
+
+      // Recibir respuesta
+      onValue(ref(db, `calls/${callRef.key}/answer`), async snap => {
+        if (snap.exists() && !pc.currentRemoteDescription) {
+          await pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
+          document.getElementById('status').innerText = 'Conectado';
+        }
+      });
+
+      // Recibir candidatos ICE del admin
+      onValue(ref(db, `calls/${callRef.key}/adminCandidates`), snap => {
+        snap.forEach(child => pc.addIceCandidate(new RTCIceCandidate(child.val())));
+      });
+    };
+  </script>
+</body>
+</html>

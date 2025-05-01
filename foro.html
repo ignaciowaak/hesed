@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Foro Anónimo</title>
+    <style>
+        /* Provided Styles */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --primary-color: #007aff;
+            --accent-color: #5ac8fa;
+            --bg-gradient: linear-gradient(135deg, #1c1c1e, #2c2c2e);
+            --card-bg: rgba(255, 255, 255, 0.25);
+            --text-color: #f2f2f7;
+            --secondary-text-color: #d1d1d6;
+            --border-color: rgba(255, 255, 255, 0.2);
+            --blur-effect: backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+        }
+        html {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background: var(--bg-gradient) fixed no-repeat;
+            background-size: cover;
+            background-position: center;
+            color: var(--text-color);
+            padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+        }
+        body {
+             line-height: 1.6;
+             /* Adjusted padding-bottom to account for potentially larger input area with preview */
+             padding-bottom: calc(100px + env(safe-area-inset-bottom, 0)); /* Initial guess for input area height with preview */
+             min-height: 100vh;
+             display: flex;
+             flex-direction: column;
+        }
+        a { color: inherit; text-decoration: none; }
+        ul { list-style: none; }
+        img { max-width: 100%; height: auto; display: block; }
+
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 44px;
+            padding-top: env(safe-area-inset-top, 0);
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .menu-toggle {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border:none;
+            font-size: 20px;
+            color: var(--text-color);
+            cursor: pointer;
+        }
+        .logo {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        header .btn-talk {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--primary-color);
+            color: #fff;
+            padding: 6px 14px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 15px;
+            transition: background 0.2s ease;
+            cursor: pointer;
+        }
+        header .btn-talk:hover { background: var(--accent-color); }
+
+        .btn-primary {
+            display: inline-block;
+            background: var(--primary-color);
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            text-align: center;
+            transition: background 0.2s ease;
+            margin-top: 1rem;
+            cursor: pointer;
+        }
+        .btn-primary:hover { background: var(--accent-color); }
+
+        nav ul { display: none; }
+        nav ul.show {
+            display: flex;
+            flex-direction: column;
+            background: rgba(44, 44, 46, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            position: absolute;
+            top: calc(44px + env(safe-area-inset-top, 0));
+            left: 0;
+            width: 100%;
+            padding: 1rem;
+            gap: 1rem;
+            z-index: 999;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        main {
+            flex-grow: 1;
+            padding-top: calc(44px + env(safe-area-inset-top, 0) + 1rem);
+            padding-bottom: 1rem; /* Space above fixed input */
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .container { max-width: 940px; margin: 0 auto; padding: 0 1rem; }
+
+        /* Added Styles for Forum/Chat Interface */
+        .message-feed {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+             /* Padding below feed to avoid the fixed input area. Adjust if input area height changes. */
+            padding-bottom: calc(90px + env(safe-area-inset-bottom, 0));
+        }
+
+        .message {
+            --message-bg: rgba(255, 255, 255, 0.1);
+            --message-border: rgba(255, 255, 255, 0.15);
+            padding: 10px 15px;
+            border-radius: 18px;
+            background: var(--message-bg);
+            border: 1px solid var(--message-border);
+            max-width: 80%;
+            word-break: break-word;
+            align-self: flex-start;
+            animation: fadeIn 0.3s ease-out;
+            /* Use flexbox to arrange content (image/text) inside the bubble */
+            display: flex;
+            flex-direction: column;
+            gap: 5px; /* Space between elements inside the message */
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message p {
+            margin: 0; /* Reset default margin */
+            color: var(--text-color);
+            /* Ensure text doesn't get weird spacing if next to an image */
+            flex-shrink: 0; /* Prevent text from shrinking if image is large */
+        }
+
+        .message img {
+            max-width: 100%;
+            border-radius: 12px;
+            /* No margin-top needed if using gap in flex container */
+            margin-top: 0;
+            display: block; /* Ensure it behaves like a block element */
+            /* Optional: Add max-height for large images in feed */
+            /* max-height: 300px; */
+            object-fit: cover; /* Prevent distortion if max-height is set */
+        }
+
+         /* Style for messages sent by the current anonymous user (optional) */
+        .message.sent {
+             align-self: flex-end;
+             background: rgba(0, 122, 255, 0.2);
+             border-color: rgba(0, 122, 255, 0.3);
+        }
+
+
+        .message-input-area {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(28, 28, 30, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 10px env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+            display: flex;
+            /* Changed to column to stack preview above input row */
+            flex-direction: column;
+            align-items: stretch; /* Stretch items like input/preview */
+            gap: 5px; /* Space between stacked items */
+            border-top: 1px solid var(--border-color);
+            z-index: 100;
+        }
+
+         /* Container for the image preview */
+        .image-preview-area {
+            display: none; /* Hidden by default */
+            position: relative;
+            width: 60px; /* Small fixed width for preview */
+            height: 60px; /* Small fixed height for preview */
+            border-radius: 8px;
+            overflow: hidden;
+            /* Align preview with the start of the text input */
+            margin-left: 10px;
+            margin-bottom: 5px; /* Space below the preview */
+            border: 1px solid var(--border-color);
+            flex-shrink: 0;
+            align-self: flex-start; /* Align to the start of the column */
+        }
+
+        .image-preview-area.visible {
+            display: block; /* Show when an image is selected */
+        }
+
+        #image-preview {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Crop image to fit the preview area */
+        }
+
+        .clear-image-button {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 14px;
+            line-height: 1;
+            text-align: center;
+            padding: 0;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+         .clear-image-button:hover {
+             background: rgba(255, 0, 0, 0.7);
+         }
+
+        /* Container for the input field and send button */
+        .input-row {
+             display: flex;
+             align-items: center;
+             gap: 8px;
+             width: 100%; /* Take full width */
+        }
+
+
+        .message-input {
+            flex-grow: 1;
+            padding: 10px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            font-size: 1rem;
+            outline: none;
+            resize: none;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .message-input::placeholder {
+            color: var(--secondary-text-color);
+            opacity: 0.7;
+        }
+
+        .image-upload-button {
+             background: none;
+             border: none;
+             color: var(--primary-color);
+             font-size: 24px;
+             cursor: pointer;
+             padding: 5px;
+             transition: color 0.2s ease;
+             flex-shrink: 0; /* Prevent button from shrinking */
+        }
+         .image-upload-button:hover {
+             color: var(--accent-color);
+         }
+
+         .send-button {
+             background: var(--primary-color);
+             color: #fff;
+             border: none;
+             border-radius: 20px;
+             padding: 10px 20px;
+             font-weight: 600;
+             cursor: pointer;
+             transition: background 0.2s ease;
+             height: 40px;
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             flex-shrink: 0; /* Prevent button from shrinking */
+         }
+         .send-button:hover {
+             background: var(--accent-color);
+         }
+         .send-button:disabled {
+             background: rgba(120, 120, 128, 0.36);
+             color: rgba(235, 235, 245, 0.3);
+             cursor: not-allowed;
+         }
+
+         /* Hide the default file input visually */
+         .image-input {
+             display: none;
+         }
+
+         /* --- Mobile Keyboard Avoidance --- */
+         body.keyboard-open {
+            /* This class is added by JS. The actual padding adjustment is done in JS
+               by setting body.style.paddingBottom dynamically. */
+         }
+
+
+        footer {
+            text-align: center;
+            padding: 1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom, 0)) 1rem;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255,255,255,0.2);
+            font-size: 0.85rem;
+            color: var(--secondary-text-color);
+            margin-top: auto;
+        }
+
+        @media (min-width: 769px) {
+            header {
+                height: auto;
+                padding: 1rem 1.5rem;
+                justify-content: space-between;
+                position: static;
+                padding-top: 1rem;
+            }
+            .menu-toggle { display: none; }
+            nav ul {
+                display: flex;
+                gap: 1rem;
+                position: static;
+                flex-direction: row;
+                background: none;
+                width: auto;
+                padding: 0;
+                border-bottom: none;
+            }
+            nav ul.show { display: flex; }
+
+            main {
+                 padding-top: calc(1rem + 1rem);
+                 padding-bottom: 1rem;
+            }
+
+            .message-feed {
+                 padding-bottom: 1rem; /* Adjust feed padding on desktop */
+            }
+
+            .message-input-area {
+                 position: static;
+                 padding: 1rem;
+                 border-top: none;
+                 max-width: 940px;
+                 margin: 1rem auto;
+                 background: rgba(28, 28, 30, 0.7);
+                 border-radius: 12px;
+                 border: 1px solid var(--border-color);
+                 flex-direction: row; /* Back to row on desktop */
+                 align-items: center; /* Align items in the row */
+            }
+            .image-preview-area {
+                 align-self: center; /* Center in the row */
+                 margin-bottom: 0; /* Remove bottom margin */
+            }
+            .input-row {
+                width: auto; /* Auto width on desktop */
+                flex-grow: 1; /* Allow input row to grow */
+            }
+             body { padding-bottom: 0; } /* Remove body padding on desktop */
+
+        }
+
+        #nav-list li a {
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        #nav-list li a:hover {
+            color: var(--accent-color);
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <button class="menu-toggle" id="menu-toggle">&#9776;</button>
+        <span class="logo">Foro Anónimo</span>
+    </header>
+
+    <nav>
+        <ul id="nav-list">
+            <li><a href="index.html">Inicio</a></li>
+            <li><a href="#">Acerca de</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <div class="container">
+            <div class="message-feed" id="message-feed">
+                </div>
+        </div>
+    </main>
+
+    <div class="message-input-area">
+        <div class="image-preview-area" id="image-preview-area">
+            <img id="image-preview" src="" alt="Image Preview">
+            <button class="clear-image-button" id="clear-image-button">&times;</button> </div>
+
+        <input type="file" accept="image/*" class="image-input" id="image-input">
+
+        <div class="input-row">
+            <button class="image-upload-button" id="image-upload-button">&#128247;</button> <input type="text" class="message-input" id="message-input" placeholder="Escribe un mensaje...">
+            <button class="send-button" id="send-button" disabled>Enviar</button>
+        </div>
+    </div>
+
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 Foro Anónimo. Todos los derechos reservados.</p>
+        </div>
+    </footer>
+
+    <script type="module">
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+      import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+      import { getDatabase, ref, push, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+      import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+
+      // Your web app's Firebase configuration - **MAKE SURE THIS IS CORRECT FOR YOUR PROJECT**
+      const firebaseConfig = {
+        apiKey: "AIzaSyA_USvfSXAqZf7hQhJCon0WulnrrINB7cI",
+        authDomain: "the-pic-c437e.firebaseapp.com",
+        databaseURL: "https://the-pic-c437e-default-rtdb.firebaseio.com",
+        projectId: "the-pic-c437e",
+        storageBucket: "the-pic-c437e.appspot.com",
+        messagingSenderId: "750954597180",
+        appId: "1:750954597180:web:d7b67c6b60f4d3bb17ec39"
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const database = getDatabase(app);
+      const storage = getStorage(app);
+
+      // Firebase References
+      const messagesRef = ref(database, 'messages');
+      const storageBaseRef = storageRef(storage, 'chat_images'); // Folder for images
+
+      // DOM Elements
+      const messageFeed = document.getElementById('message-feed');
+      const messageInput = document.getElementById('message-input');
+      const imageInput = document.getElementById('image-input'); // The hidden file input
+      const imageUploadButton = document.getElementById('image-upload-button'); // The visible camera icon button
+      const sendButton = document.getElementById('send-button');
+      const menuToggle = document.getElementById('menu-toggle');
+      const navList = document.getElementById('nav-list');
+      const body = document.body; // Reference to the body for keyboard handling
+
+      // New DOM Elements for Image Preview
+      const imagePreviewArea = document.getElementById('image-preview-area');
+      const imagePreview = document.getElementById('image-preview');
+      const clearImageButton = document.getElementById('clear-image-button');
+
+
+      // --- Anonymous Authentication ---
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          console.log('Anonymous user signed in:', user.uid);
+          listenForMessages();
+          messageInput.disabled = false;
+          updateSendButtonState();
+
+        } else {
+          console.log('No anonymous user signed in. Signing in...');
+          signInAnonymously(auth).catch((error) => {
+            console.error('Anonymous sign-in failed:', error);
+            alert('Error al iniciar sesión anónimamente. Inténtalo de nuevo más tarde.');
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+          });
+        }
+      });
+
+
+      // --- Send Message Function ---
+      async function sendMessage() {
+          const text = messageInput.value.trim();
+          const file = imageInput.files[0]; // Get the selected file from the hidden input
+
+          if (!text && !file) {
+              return; // Don't send empty message with no image
+          }
+
+          sendButton.disabled = true; // Disable button while sending
+
+          try {
+              let imageUrl = null;
+
+              if (file) {
+                  // Upload image to Firebase Storage
+                  // Use current user's anonymous ID or a generic path if truly anonymous write is allowed
+                  const userId = auth.currentUser ? auth.currentUser.uid : 'anonymous'; // Fallback ID
+                  const imageName = `${userId}/${Date.now()}-${file.name}`; // Path includes user ID (good practice)
+                  const imageRef = storageRef(storageBaseRef, imageName);
+                  const uploadTask = await uploadBytes(imageRef, file);
+                  imageUrl = await getDownloadURL(uploadTask.ref);
+                  console.log('Image uploaded:', imageUrl);
+              }
+
+              // Push message to Realtime Database
+              await push(messagesRef, {
+                  text: text || null, // Store null if no text
+                  imageUrl: imageUrl || null, // Store null if no image
+                  timestamp: serverTimestamp()
+                  // Optionally store auth.currentUser.uid if you need to identify sender (even anonymously)
+                  // userId: auth.currentUser ? auth.currentUser.uid : null
+              });
+
+              console.log('Message sent successfully');
+
+              // Clear input fields and preview after sending
+              messageInput.value = '';
+              clearSelectedImage(); // Use the function to clear image input and preview
+              updateSendButtonState();
+
+          } catch (error) {
+              console.error('Error sending message:', error);
+              alert('Error al enviar el mensaje.');
+              sendButton.disabled = false; // Re-enable button on error
+          }
+      }
+
+      // --- Listen for Messages ---
+      function listenForMessages() {
+          onValue(messagesRef, (snapshot) => {
+              messageFeed.innerHTML = ''; // Clear current feed
+              const messages = snapshot.val();
+
+              if (messages) {
+                  const messageList = Object.keys(messages).map(key => ({
+                      id: key,
+                      ...messages[key]
+                  }));
+
+                  // Sort messages by timestamp (ascending)
+                   messageList.sort((a, b) => {
+                       // Handle cases where timestamp might be null (messages sent before serverTimestamp resolves)
+                       const tsA = a.timestamp || 0;
+                       const tsB = b.timestamp || 0;
+                       return tsA - tsB;
+                   });
+
+                  messageList.forEach(msg => {
+                      displayMessage(msg);
+                  });
+
+                  scrollToBottom(); // Scroll to the bottom after loading messages
+              }
+          }, (error) => {
+              console.error('Error listening for messages:', error);
+              // Handle error displaying messages
+          });
+      }
+
+      // --- Display Single Message ---
+      function displayMessage(msg) {
+          // Only create a message element if there is text OR an image
+          if (!msg.text && !msg.imageUrl) return;
+
+          const messageElement = document.createElement('div');
+          messageElement.classList.add('message');
+
+           // Optional: Add 'sent' class if you track user ID
+           // if (auth.currentUser && msg.userId === auth.currentUser.uid) {
+           //     messageElement.classList.add('sent');
+           // }
+
+          // Add image first if it exists
+          if (msg.imageUrl) {
+              const imgElement = document.createElement('img');
+              imgElement.src = msg.imageUrl;
+              imgElement.alt = 'Uploaded Image';
+              imgElement.loading = 'lazy'; // Improve performance for many images
+              imgElement.addEventListener('click', () => {
+                  window.open(msg.imageUrl, '_blank'); // Open full image in new tab
+              });
+              messageElement.appendChild(imgElement);
+          }
+
+          // Add text second if it exists
+          if (msg.text) {
+              const textElement = document.createElement('p');
+              textElement.textContent = msg.text;
+              messageElement.appendChild(textElement);
+          }
+
+          messageFeed.appendChild(messageElement);
+      }
+
+      // --- Scroll to Bottom ---
+      function scrollToBottom() {
+          // Use a slight delay to allow new elements to render
+          setTimeout(() => {
+              window.scrollTo({
+                  top: document.body.scrollHeight,
+                  behavior: 'smooth'
+              });
+          }, 50); // 50ms delay
+      }
+
+
+      // --- Image Preview Logic ---
+      function handleImageSelect(event) {
+          const file = event.target.files[0]; // Get the selected file
+
+          if (file) {
+              // Check file type (optional but good practice)
+              if (!file.type.startsWith('image/')) {
+                  alert('Por favor, selecciona un archivo de imagen.');
+                  clearSelectedImage(); // Clear invalid selection
+                  return;
+              }
+
+              // Read the file to display preview
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                  imagePreview.src = e.target.result; // Set preview image source
+                  imagePreviewArea.classList.add('visible'); // Show the preview area
+                  updateSendButtonState(); // Update send button state
+                  // Scroll down to make sure the preview is visible above the keyboard
+                  scrollToBottom();
+              };
+              reader.readAsDataURL(file); // Read file as data URL
+          } else {
+              // If no file is selected (e.g., user cancels)
+              clearSelectedImage();
+          }
+      }
+
+      function clearSelectedImage() {
+          imageInput.value = ''; // Clear the file input itself
+          imagePreview.src = ''; // Clear the preview image source
+          imagePreviewArea.classList.remove('visible'); // Hide the preview area
+          updateSendButtonState(); // Update send button state
+      }
+
+
+      // --- Update Send Button State ---
+      function updateSendButtonState() {
+          const text = messageInput.value.trim();
+          const file = imageInput.files.length > 0; // Check if a file is selected
+          sendButton.disabled = (!text && !file); // Disable if no text AND no file
+      }
+
+
+      // --- Event Listeners ---
+
+      // Send button click
+      sendButton.addEventListener('click', sendMessage);
+
+      // Send on Enter key in message input (and Shift+Enter for new line)
+      messageInput.addEventListener('keypress', (event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault(); // Prevent default Enter behavior (new line)
+              sendMessage();
+          }
+      });
+
+      // Listen for input changes (text or file) to update send button state
+      messageInput.addEventListener('input', updateSendButtonState);
+      imageInput.addEventListener('change', handleImageSelect); // Handle file selection AND update state
+
+      // Trigger hidden file input when camera icon is clicked
+      imageUploadButton.addEventListener('click', () => {
+          imageInput.click();
+      });
+
+      // Listen for click on the clear preview button
+      clearImageButton.addEventListener('click', clearSelectedImage);
+
+
+      // --- Mobile Menu Toggle ---
+      menuToggle.addEventListener('click', () => {
+          navList.classList.toggle('show');
+      });
+
+       // Close menu when a link is clicked (optional)
+       navList.querySelectorAll('a').forEach(link => {
+           link.addEventListener('click', () => {
+               navList.classList.remove('show');
+           });
+       });
+
+
+      // --- Basic Mobile Keyboard Handling ---
+      // Adjust body padding when the input gets focus to try and avoid keyboard cover
+      // This is a simple heuristic and might not work perfectly on all devices/keyboards.
+      let initialBodyPaddingBottom = parseFloat(getComputedStyle(body).paddingBottom);
+
+      messageInput.addEventListener('focus', () => {
+         const inputAreaHeight = document.querySelector('.message-input-area').offsetHeight;
+         // Add input area height plus a small buffer
+         body.style.paddingBottom = `${inputAreaHeight + 20}px`;
+         body.classList.add('keyboard-open');
+         // Scroll to the bottom after focus and padding adjustment
+         scrollToBottom();
+      });
+
+      messageInput.addEventListener('blur', () => {
+         // Restore original padding after keyboard is closed
+         body.style.paddingBottom = `${initialBodyPaddingBottom}px`;
+         body.classList.remove('keyboard-open');
+          // Scroll to the bottom again just in case
+         scrollToBottom();
+      });
+
+      // Initial check for send button state when page loads
+      updateSendButtonState();
+
+    </script>
+
+</body>
+</html>

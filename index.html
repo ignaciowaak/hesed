@@ -1,0 +1,364 @@
+<!DOCTYPE html><html lang="es"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>HESED</title>
+<style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary-color: #007aff;
+      --accent-color: #5ac8fa;
+      --bg-gradient: linear-gradient(135deg, #1c1c1e, #2c2c2e);
+    }
+    html {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: var(--bg-gradient) fixed no-repeat;
+      background-size: cover;
+      background-position: center;
+      color: #f2f2f7;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    body { line-height: 1.6; }
+    a { color: inherit; text-decoration: none; }
+    ul { list-style: none; }
+    img { max-width: 100%; height: auto; display: block; }header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 44px;
+  padding-top: env(safe-area-inset-top);
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.menu-toggle {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border:none;
+  font-size: 20px;
+  color: #f2f2f7;
+}
+.logo {
+  font-size: 17px;
+  font-weight: 600;
+  color: #f2f2f7;
+}
+header .btn-talk {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--primary-color);
+  color: #fff;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  transition: background 0.2s;
+}
+header .btn-talk:hover { background: var(--accent-color); }
+
+.btn-primary {
+  display: inline-block;
+  background: var(--primary-color);
+  color: #fff;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+  transition: background 0.2s;
+  margin-top: 1rem;
+}
+.btn-primary:hover { background: var(--accent-color); }
+
+nav ul { display: none; }
+nav ul.show {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255,255,255,1.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  position: absolute;
+  top: calc(44px + env(safe-area-inset-top));
+  left: 0;
+  width: 100%;
+  padding: 1rem;
+  gap: 1rem;
+  z-index: 999;
+}
+
+main { padding-top: calc(44px + env(safe-area-inset-top) + 1rem); }
+.container { max-width: 940px; margin: 0 auto; padding: 1rem; }
+
+.hero {
+  text-align: center;
+  padding: 3rem 1rem;
+  background-image: url('fotos/bg-hero.jpg');
+  background-size: cover;
+  background-position: center;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.2);
+  margin: 1rem;
+}
+.hero h1 { font-size: 1.75rem; margin-bottom: 0.75rem; color: #f2f2f7; }
+.hero p { font-size: 0.95rem; color: #d1d1d6; margin-bottom: 1.5rem; }
+
+section { margin-bottom: 3rem; }
+
+/* Ajuste aquí: cambiado auto-fill a auto-fit */
+.cards {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); /* <--- CAMBIO AQUÍ */
+  gap: 1rem;
+}
+
+.card, .blog-card {
+  position: relative;
+  /* La imagen de fondo es una base, puedes sobreescribirla en cada tarjeta si es necesario */
+  background-image: url('fotosindex/1.jpg'); /* Asegúrate de que esta ruta sea correcta */
+  background-size: cover;
+  background-position: center;
+  /* backdrop-filter y background-color crean el efecto frosted glass/blur */
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background-color: rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  padding: 1rem;
+  text-align: center;
+  color: #f2f2f7;
+  overflow: hidden; /* Importante si usas pseudo-elementos o overlays */
+}
+
+/* Si quieres que el fondo de cada tarjeta sea único,
+   deberías agregar clases o estilos inline a cada .card */
+/* Ejemplo:
+.card.card-1 { background-image: url('fotosindex/card1.jpg'); }
+.card.card-2 { background-image: url('fotosindex/card2.jpg'); }
+...
+*/
+
+
+.card h3 { margin: 0.75rem 0; font-size: 1.1rem; }
+.card p { color: #d1d1d6; font-size: 0.9rem; }
+
+.chat {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.chat-text { flex: 1; }
+
+/* Ajuste aquí: cambiado auto-fill a auto-fit */
+.blog-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); /* <--- CAMBIO AQUÍ */
+  gap: 1rem;
+}
+.blog-card h4 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+.blog-card a { font-size: 0.85rem; color: var(--primary-color); }
+
+footer {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255,255,255,0.2);
+  font-size: 0.85rem;
+  color: #d1d1d6;
+}
+
+@media (min-width: 769px) {
+  header {
+    height: auto;
+    padding: 1rem 1.5rem;
+    justify-content: space-between;
+  }
+  .menu-toggle { display: none; }
+  nav ul {
+    display: flex;
+    gap: 1rem;
+    position: static;
+    flex-direction: row;
+    background: none; /* O background: transparent; si quieres que se vea el fondo detrás */
+    width: auto;
+    padding: 0;
+    /* Asegúrate de que el color de los enlaces sea visible aquí */
+    color: #fff; /* O el color que prefieras para desktop */
+  }
+    /* Esto sobrescribía el color para desktop, lo muevo dentro del media query si solo aplica a desktop */
+#nav-list li a {
+  color: #333; /* O un color oscuro de tu preferencia, como #1c1c1e */
+  text-decoration: none;
+}
+
+#nav-list li a:hover {
+  color: var(--primary-color); /* O un color de hover para mobile */
+}
+
+@media (min-width: 769px) {
+  /* ... (todo el código dentro del media query) ... */
+
+  /* Esta regla de abajo sobrescribe el color solo en desktop */
+  #nav-list li a {
+    color: #f2f2f7; /* Color claro para enlaces en desktop */
+    /* ... otras propiedades si las tienes aquí ... */
+  }
+
+  #nav-list li a:hover {
+    color: var(--accent-color); /* Color de hover para desktop */
+  }
+
+  /* ... (resto del media query) ... */
+}
+
+
+
+  nav ul.show { display: flex; } /* Aunque con position: static, show no debería ser necesario aquí */
+
+  /* Ajuste para el color de los enlaces del menú en mobile/desktop */
+  /* Si quieres que #nav-list li a tenga color diferente en mobile,
+     deberías definirlo fuera del media query */
+}
+
+/* Definición de color de enlace para mobile si es diferente */
+/* Quité la regla #nav-list li a fuera del media query porque estaba definiendo el color azul (#1e90ff)
+   que contrastaría mal con el fondo oscuro del nav mobile. */
+/* Si quieres que el color sea azul en mobile, puedes poner esta regla FUERA del media query */
+/* #nav-list li a { color: #1e90ff; text-decoration: none; } */
+
+.chat-img, img{
+  border-radius: 20px;
+  max-width: 190px;
+}
+  </style>
+
+</head>
+
+  <header>
+    <button class="menu-toggle" onclick="toggleMenu()">☰</button>
+    <div class="logo">HESED</div>
+    <button class="btn-talk" onclick="startChat()">¿Necesitás hablar?</button>
+    <nav>
+      <ul id="nav-list">
+        <li><a href="#inicio">Inicio</a></li>
+        <li><a href="#about">Nosotros</a></li>
+        <li><a href="#chat">Chat</a></li>
+        <li><a href="#resources">Recursos</a></li>
+        <li><a href="foro.html">Nuestro Foro</a></li>
+        <li><a href="#join">Sumate</a></li>
+        <li><a href="#contact">Contacto</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    <section id="inicio" class="hero">
+      <h1>HESED: Amor fiel en medio del caos</h1>
+      <p>Una comunidad para los que buscan contención, fe y esperanza.</p>
+      <a href="#chat" class="btn-primary">Acceder al chat</a>
+    </section>
+    <section id="about" class="container">
+      <h2>¿Qué es HESED?</h2>
+      <p>חֶסֶד (Hesed) es el amor fiel, la gracia activa y la misericordia inquebrantable de Dios. Un espacio de apoyo emocional y espiritual para quienes lo necesiten.</p>
+    </section>
+    <section id="resources" class="container">
+      <h2>Recursos Destacados</h2>
+<div class="cards">
+  <div class="card">
+    <img src="fotosindex/2.png" alt="Primeros auxilios emocionales" style="width: 100%; display: block; margin: 0 auto; border-radius: 8px;">
+    <h3>Guía de primeros auxilios emocionales</h3>
+    <p>Herramientas prácticas para calmar la ansiedad y el estrés.</p>
+  </div>
+</div>
+<div class="cards">
+  <div class="card">
+    <img src="fotosindex/3.png" alt="Primeros auxilios emocionales" style="width: 100%; display: block; margin: 0 auto; border-radius: 8px;">
+    <h3>Listado de psicologos gratuitos en tu zona</h3>
+    <p>Podes encontrar ayuda psicológica en tu zona no esta solo/a</p>
+  </div>
+</div>
+       
+      </div>
+    </section>
+    <section id="chat" class="container">
+      <h2>Chat en Vivo</h2>
+      <div class="chat">
+        <div class="chat-text">
+          <p>¿Querés hablar con alguien? Estamos acá para vos.</p>
+          <button class="btn-primary" onclick="window.location.href='call.html'">
+  Iniciar conversación anónima
+</button>
+        </div>
+        <div class="chat-img">
+          <img src="fotosindex/4.png" alt="Chat illustration">
+        </div>
+      </div>
+    </section>
+    <section id="blog" class="container">
+      <h2>Blog y Reflexiones</h2>
+      <div class="blog-cards">
+        <div class="blog-card">
+          <h4>Cuando no podés más…</h4>
+          <a href="#">Leer más →</a>
+        </div>
+        <div class="blog-card">
+          <h4>Dios en el silencio</h4>
+          <a href="#">Leer más →</a>
+        </div>
+        <div class="blog-card">
+          <h4>Ansiedad y fe: un puente real</h4>
+          <a href="#">Leer más →</a>
+        </div>
+      </div>
+    </section>
+    <section id="join" class="container">
+      <h2>Sumate a HESED</h2>
+      <p>¿Querés ayudar a otros o apoyar este espacio?</p>
+      <div class="cards">
+        <div class="card">
+          <h3>Voluntariado</h3>
+          <p>Formá parte del equipo de contención y acompañamiento.</p>
+        </div>
+        <div class="card">
+          <h3>Donaciones</h3>
+          <p>Aportá para sostener este proyecto y sus recursos gratuitos.</p>
+        </div>
+      </div>
+    </section>
+    <section id="contact" class="container">
+      <h2>Contacto</h2>
+      <form onsubmit="submitForm(event)">
+        <input type="text" name="name" placeholder="Tu nombre" required style="width:100%; padding:.8rem; margin-bottom:1rem; border-radius:8px; border:1px solid #ccc;">
+        <input type="email" name="email" placeholder="Tu email" required style="width:100%; padding:.8rem; margin-bottom:1rem; border-radius:8px; border:1px solid #ccc;">
+        <textarea name="message" rows="4" placeholder="Tu mensaje" required style="width:100%; padding:.8rem; margin-bottom:1rem; border-radius:8px; border:1px solid #ccc;"></textarea>
+        <button type="submit" class="btn-primary">Enviar mensaje</button>
+      </form>
+    </section>
+  </main>
+  <footer>
+    <p>&copy; 2025 HESED. El amor de Dios nunca falla – Lamentaciones 3:22</p>
+  </footer>
+  <script>
+    function toggleMenu() { document.getElementById('nav-list').classList.toggle('show'); }
+    function startChat() { alert('Iniciando chat de contención...'); }
+    function submitForm(e) { e.preventDefault(); alert('Gracias por contactarnos. Te responderemos pronto.'); e.target.reset(); }
+  </script>
+</body>
+</html>
