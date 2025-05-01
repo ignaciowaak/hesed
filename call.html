@@ -34,7 +34,7 @@
       line-height: 1.6;
     }
 
-    /* ­————— Rotador de frases estilo iOS ————— */
+    /* ————— Rotador de frases estilo iOS ————— */
     #anxietyMessage {
       position: fixed;
       top: calc(20px + env(safe-area-inset-top));
@@ -54,7 +54,7 @@
       z-index: 1000;
     }
 
-    /* ­————— Botón y audio (tu CSS existente adaptado) ————— */
+    /* ————— Botón y audio (tu CSS existente adaptado) ————— */
     h2 {
       margin-bottom: 1.5rem;
       font-size: 1.5rem;
@@ -90,7 +90,6 @@
 </head>
 <body>
 
-  <!-- Componente de frases -->
   <div id="anxietyMessage"></div>
 
   <h2>No estas solo estamos con vos</h2>
@@ -98,7 +97,6 @@
   <p id="status">Esperando...</p>
   <audio id="remoteAudio" controls autoplay></audio>
 
-  <!-- Script para rotar frases sin solaparlas -->
   <script>
     (function() {
       const messages = [
@@ -132,7 +130,6 @@
     })();
   </script>
 
-  <!-- Tu script original de WebRTC / Firebase sin alterar -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getDatabase, ref, push, set, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
@@ -149,12 +146,31 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    const iceConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+    // **MODIFICACIÓN:** Añadimos un servidor TURN a la configuración ICE
+    const iceConfig = {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        {
+          urls: "turn:numb.viagenie.ca:3478", // Servidor TURN público para pruebas
+          username: "webrtc@live.com",
+          credential: "password"
+        }
+      ]
+    };
 
     let pc, localStream, callRef;
 
     document.getElementById('startCall').onclick = async () => {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Añadir manejo de errores para getUserMedia
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (error) {
+        console.error("Error al acceder al micrófono:", error);
+        document.getElementById('status').innerText = 'Error: No se pudo acceder al micrófono.';
+        return; // Salir si no se obtiene el micrófono
+      }
+
+
       pc = new RTCPeerConnection(iceConfig);
       const remoteStream = new MediaStream();
       const remoteAudio = document.getElementById('remoteAudio');
@@ -164,17 +180,51 @@
 
       pc.ontrack = event => {
         remoteStream.addTrack(event.track);
-        remoteAudio.play().catch(() => {});
+        // Intentar reproducir, pero manejar posibles restricciones de autoplay en móviles
+        remoteAudio.play().catch(() => {
+           // Si falla el autoplay (común en móviles sin interacción previa),
+           // podrías mostrar un mensaje al usuario pidiendo que interactúe
+           // o simplemente dejar que intente reproducir más tarde.
+           console.log("Autoplay de audio remoto bloqueado o fallido.");
+           document.getElementById('status').innerText = 'Audio remoto listo (puede requerir interacción para empezar)';
+        });
       };
 
       pc.onicecandidate = event => {
         if (event.candidate) push(ref(db, `calls/${callRef.key}/callerCandidates`), event.candidate.toJSON());
       };
 
+      // Añadir listeners para el estado de la conexión
+      pc.oniceconnectionstatechange = () => {
+          console.log(`ICE connection state: ${pc.iceConnectionState}`);
+          // Puedes actualizar el estado en la UI si quieres (opcional)
+          // document.getElementById('status').innerText = `ICE: ${pc.iceConnectionState}`;
+      };
+
+       pc.onconnectionstatechange = () => {
+          console.log(`Connection state: ${pc.connectionState}`);
+           if (pc.connectionState === 'connected') {
+               document.getElementById('status').innerText = 'Conectado';
+           } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+               document.getElementById('status').innerText = `Llamada terminada (${pc.connectionState})`;
+               // Limpiar recursos si es necesario
+               if (localStream) {
+                   localStream.getTracks().forEach(track => track.stop());
+               }
+               pc.close();
+               pc = null;
+           } else {
+               document.getElementById('status').innerText = `Estado: ${pc.connectionState}`;
+           }
+       };
+
+
       // Crear llamada
       callRef = push(ref(db, 'calls'));
       await set(callRef, { status: 'waiting' });
+      // Limpiar el llamado de Firebase si la página se cierra o recarga
       onDisconnect(callRef).remove();
+
 
       // Crear y enviar oferta
       const offer = await pc.createOffer();
@@ -186,13 +236,13 @@
       onValue(ref(db, `calls/${callRef.key}/answer`), async snap => {
         if (snap.exists() && !pc.currentRemoteDescription) {
           await pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
-          document.getElementById('status').innerText = 'Conectado';
+          // El estado "Conectado" ahora se actualiza en pc.onconnectionstatechange
         }
       });
 
       // Recibir candidatos ICE del admin
       onValue(ref(db, `calls/${callRef.key}/adminCandidates`), snap => {
-        snap.forEach(child => pc.addIceCandidate(new RTCIceCandidate(child.val())));
+        snap.forEach(child => pc.addIceCandidate(new RTCIceCandidate(child.val())).catch(e => console.error("Error adding ICE candidate:", e))); // Añadido catch para errores en addIceCandidate
       });
     };
   </script>

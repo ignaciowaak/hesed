@@ -1,14 +1,25 @@
-<!DOCTYPE html><html lang="es">
+<!DOCTYPE html>
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <title>Admin - Llamadas</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    button { margin-left: 10px; }
+    #remoteAudio { display: block; margin-top: 20px; }
+    #status { margin-top: 10px; font-weight: bold; }
+  </style>
 </head>
 <body>
   <h2>Administrador</h2>
-  <ul id="queue"></ul>
-  <audio id="remoteAudio" controls autoplay></audio>  <script type="module">
+  <h3>Llamadas en espera:</h3>
+  <ul id="queue">
+    <li>Cargando...</li> </ul>
+  <p id="status">Inactivo</p> <audio id="remoteAudio" controls autoplay></audio>
+
+  <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getDatabase, ref, onChildAdded, get, set, push, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+    import { getDatabase, ref, onChildAdded, onChildRemoved, get, set, push, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
     // Configuración Firebase
     const firebaseConfig = {
@@ -22,53 +33,217 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    const iceConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+    // **MODIFICACIÓN:** Añadimos el mismo servidor TURN que en el código del usuario
+    const iceConfig = {
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        {
+          urls: "turn:numb.viagenie.ca:3478", // Servidor TURN público para pruebas
+          username: "webrtc@live.com",
+          credential: "password"
+        }
+      ]
+    };
 
     let inCall = false;
+    let currentPeerConnection = null; // Referencia a la conexión actual
+    let currentLocalStream = null; // Referencia al stream local actual
+
+    const queueList = document.getElementById('queue');
+    const statusDisplay = document.getElementById('status');
+    const remoteAudio = document.getElementById('remoteAudio');
+
+
+    // Limpiar el mensaje inicial
+    queueList.innerHTML = '';
+
+    // Escuchar nuevas llamadas en espera
     onChildAdded(ref(db, 'calls'), snap => {
       const data = snap.val();
+      // Solo añadir a la cola si está esperando y el admin no está ya en una llamada
       if (!inCall && data.status === 'waiting') {
         const li = document.createElement('li');
-        li.id = snap.key;
-        li.innerHTML = `User: ${snap.key} <button>Atender</button>`;
+        li.id = `call-${snap.key}`; // Usar un ID con prefijo para evitar conflictos
+        li.innerHTML = `Usuario: ${snap.key.substring(0, 8)}... <button>Atender</button>`; // Mostrar parte del ID
         li.querySelector('button').onclick = () => acceptCall(snap.key);
-        document.getElementById('queue').appendChild(li);
+        queueList.appendChild(li);
       }
+      // Si ya está en progreso y no es la llamada actual, podrías ignorarla o indicarla (opcional)
+      // Si el admin está en una llamada y llega otra, esta lógica no la mostrará en la cola.
     });
 
-    async function acceptCall(callId) {
-      inCall = true;
-      const pc = new RTCPeerConnection(iceConfig);
-      const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const remoteStream = new MediaStream();
-      const remoteAudio = document.getElementById('remoteAudio');
-      remoteAudio.srcObject = remoteStream;
+    // Escuchar llamadas que se eliminan (ej. usuario cuelga o recarga)
+    onChildRemoved(ref(db, 'calls'), snap => {
+        const listItem = document.getElementById(`call-${snap.key}`);
+        if (listItem) {
+            listItem.remove();
+            console.log(`Llamada ${snap.key} eliminada de la cola.`);
+        }
+        // Si la llamada que se eliminó era la actual, también hay que limpiar
+        if (currentPeerConnection && snap.key === currentPeerConnection.callId) {
+             console.log("La llamada actual fue eliminada por el otro lado.");
+             // La lógica de limpieza ya está en onconnectionstatechange si el estado cambia.
+             // Si la conexión se cierra de golpe, a veces onChildRemoved llega antes.
+             // Asegurarse de limpiar si currentPeerConnection no está en estado terminal.
+             if (currentPeerConnection.connectionState !== 'closed' && currentPeerConnection.connectionState !== 'failed') {
+                  handleCallEnd("La llamada remota terminó");
+             }
+        }
+    });
 
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+    async function acceptCall(callId) {
+      // Prevenir atender múltiples llamadas a la vez
+      if (inCall) {
+          console.log("Ya en una llamada, no se puede atender otra.");
+          return;
+      }
+
+      inCall = true;
+      statusDisplay.innerText = `Conectando con ${callId.substring(0, 8)}...`;
+      queueList.innerHTML = ''; // Limpiar la cola visualmente
+
+      const pc = new RTCPeerConnection(iceConfig);
+      currentPeerConnection = pc; // Guardar referencia
+      pc.callId = callId; // Asociar el ID de llamada a la conexión (útil para limpieza)
+
+
+      // Añadir manejo de errores para getUserMedia
+      try {
+        currentLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (error) {
+        console.error("Error al acceder al micrófono:", error);
+        statusDisplay.innerText = 'Error: No se pudo acceder al micrófono.';
+        inCall = false; // Resetear estado
+        currentPeerConnection = null;
+        // Opcional: Recargar la cola desde Firebase después del error si quieres
+        // window.location.reload();
+        return; // Salir si no se obtiene el micrófono
+      }
+
+
+      const remoteStream = new MediaStream();
+      remoteAudio.srcObject = remoteStream; // Esto se podría settear antes si se prefiere
+
+      currentLocalStream.getTracks().forEach(track => pc.addTrack(track, currentLocalStream));
 
       pc.ontrack = event => {
         remoteStream.addTrack(event.track);
-        remoteAudio.play().catch(() => {});
+        // Intentar reproducir, pero manejar posibles restricciones de autoplay
+        remoteAudio.play().catch(() => {
+           console.log("Autoplay de audio remoto bloqueado o fallido (Admin).");
+           statusDisplay.innerText = 'Audio remoto listo (puede requerir interacción para empezar)';
+        });
       };
 
       pc.onicecandidate = event => {
-        if (event.candidate) push(ref(db, `calls/${callId}/adminCandidates`), event.candidate.toJSON());
+        if (event.candidate) {
+           push(ref(db, `calls/${callId}/adminCandidates`), event.candidate.toJSON()).catch(e => console.error("Error pushing admin ICE candidate:", e)); // Añadido catch
+        }
       };
 
+      // Añadir listeners para el estado de la conexión
+      pc.oniceconnectionstatechange = () => {
+          console.log(`Admin ICE connection state: ${pc.iceConnectionState}`);
+      };
+
+       pc.onconnectionstatechange = () => {
+          console.log(`Admin Connection state: ${pc.connectionState}`);
+           if (pc.connectionState === 'connected') {
+               statusDisplay.innerText = `Conectado con ${callId.substring(0, 8)}...`;
+               // Eliminar la entrada de la cola visualmente si aún estuviera
+               const listItem = document.getElementById(`call-${callId}`);
+               if (listItem) listItem.remove();
+
+           } else if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+               handleCallEnd(`Llamada terminada (${pc.connectionState})`);
+           } else {
+               statusDisplay.innerText = `Estado: ${pc.connectionState}`;
+           }
+       };
+
+      // Función para manejar el fin de la llamada y limpiar
+      function handleCallEnd(message) {
+          console.log("Llamada terminada. Limpiando...");
+          statusDisplay.innerText = message;
+          inCall = false; // Permitir atender otra llamada
+          remoteAudio.srcObject = null; // Detener audio remoto
+          if (currentLocalStream) {
+              currentLocalStream.getTracks().forEach(track => track.stop()); // Detener micrófono
+              currentLocalStream = null;
+          }
+          if (currentPeerConnection) {
+              currentPeerConnection.close(); // Cerrar conexión WebRTC
+              currentPeerConnection = null;
+          }
+          // Opcional: Recargar la cola de llamadas pendientes desde Firebase
+          // (Esto podría ser necesario si no usas onChildAdded/Removed de forma completa)
+          // Pero con onChildAdded ya se añadirán las nuevas automáticamente si !inCall.
+          // Para recargar la cola *completa* tras una llamada, podrías necesitar
+          // una lógica más compleja o simplemente recargar la página del admin.
+          // Por ahora, con onChildAdded y onChildRemoved ya debería mantenerse
+          // la cola visual actualizada con las llamadas entrantes mientras no estás en una.
+          // Si quieres ver las llamadas que entraron *mientras* estabas en una,
+          // tendrías que hacer una consulta inicial a Firebase después de que termine la llamada.
+      }
+
+
       // Obtener oferta
-      const offerSnap = await get(ref(db, `calls/${callId}/offer`));
-      await pc.setRemoteDescription(new RTCSessionDescription(offerSnap.val()));
+      try {
+          const offerSnap = await get(ref(db, `calls/${callId}/offer`));
+           if (!offerSnap.exists()) {
+               console.error("No se encontró la oferta para esta llamada.");
+               handleCallEnd("Error: No se encontró la oferta");
+               // Opcional: Limpiar esta entrada fallida en Firebase
+               // set(ref(db, `calls/${callId}`), null);
+               return;
+           }
+          await pc.setRemoteDescription(new RTCSessionDescription(offerSnap.val()));
+      } catch (error) {
+          console.error("Error al obtener/establecer la oferta:", error);
+          handleCallEnd("Error al procesar la oferta");
+           // Opcional: Limpiar esta entrada fallida en Firebase
+           // set(ref(db, `calls/${callId}`), null);
+          return;
+      }
+
 
       // Crear y enviar respuesta
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      await set(ref(db, `calls/${callId}/answer`), answer);
+      try {
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          await set(ref(db, `calls/${callId}/answer`), answer);
+      } catch (error) {
+          console.error("Error al crear/enviar la respuesta:", error);
+          handleCallEnd("Error al crear respuesta");
+           // Opcional: Limpiar esta entrada fallida en Firebase
+           // set(ref(db, `calls/${callId}`), null);
+          return;
+      }
+
 
       // Escuchar candidatos del caller
-      onValue(ref(db, `calls/${callId}/callerCandidates`), snap => snap.forEach(child => pc.addIceCandidate(new RTCIceCandidate(child.val()))));
+      onValue(ref(db, `calls/${callId}/callerCandidates`), snap => {
+          snap.forEach(child => {
+              pc.addIceCandidate(new RTCIceCandidate(child.val())).catch(e => console.error("Error adding caller ICE candidate:", e)); // Añadido catch
+          });
+      });
 
-      // Marcar en progreso
-      await set(ref(db, `calls/${callId}`), { status: 'in-progress' });
+      // Marcar en progreso (Esto actualizará el estado en Firebase)
+       try {
+           await set(ref(db, `calls/${callId}/status`), 'in-progress');
+           // La lista visual ya se limpió al inicio de acceptCall
+           // La entrada completa de la llamada no se elimina de Firebase hasta que
+           // el usuario desconecta (gracias a onDisconnect() en su código).
+           // Cuando eso pase, onChildRemoved se activará y limpiará la lista si es necesario.
+       } catch (error) {
+           console.error("Error al actualizar el estado de la llamada en Firebase:", error);
+           // Manejar el error, quizás terminar la llamada si no se puede actualizar el estado
+           handleCallEnd("Error al actualizar estado en Firebase");
+       }
+
     }
-  </script></body>
+  </script>
+</body>
 </html>
