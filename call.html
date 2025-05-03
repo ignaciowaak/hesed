@@ -146,7 +146,7 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    // **MODIFICACIÓN:** Añadimos un servidor TURN a la configuración ICE
+    // Configuración ICE con STUN y TURN
     const iceConfig = {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -159,90 +159,152 @@
     };
 
     let pc, localStream, callRef;
+    const statusDisplay = document.getElementById('status');
+    const remoteAudio = document.getElementById('remoteAudio');
+
+
+    // Función para limpiar al final de la llamada
+    function handleCallEnd(message) {
+        console.log("Usuario: Llamada terminada. Limpiando...");
+        statusDisplay.innerText = message;
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop()); // Detener micrófono
+            localStream = null;
+        }
+        if (pc) {
+            pc.close(); // Cerrar conexión WebRTC
+            pc = null;
+        }
+        remoteAudio.srcObject = null; // Detener audio remoto
+        // Opcional: Actualizar UI para permitir iniciar otra llamada
+        document.getElementById('startCall').disabled = false;
+    }
+
 
     document.getElementById('startCall').onclick = async () => {
+      document.getElementById('startCall').disabled = true; // Deshabilitar botón
+
       // Añadir manejo de errores para getUserMedia
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        statusDisplay.innerText = 'Micrófono obtenido...';
       } catch (error) {
-        console.error("Error al acceder al micrófono:", error);
-        document.getElementById('status').innerText = 'Error: No se pudo acceder al micrófono.';
+        console.error("Usuario: Error al acceder al micrófono:", error);
+        statusDisplay.innerText = 'Error: No se pudo acceder al micrófono.';
+        document.getElementById('startCall').disabled = false; // Habilitar botón de nuevo
         return; // Salir si no se obtiene el micrófono
       }
 
 
       pc = new RTCPeerConnection(iceConfig);
-      const remoteStream = new MediaStream();
-      const remoteAudio = document.getElementById('remoteAudio');
-      remoteAudio.srcObject = remoteStream;
 
       localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
       pc.ontrack = event => {
+        console.log('Usuario: Recibido remote track');
         remoteStream.addTrack(event.track);
         // Intentar reproducir, pero manejar posibles restricciones de autoplay en móviles
         remoteAudio.play().catch(() => {
-           // Si falla el autoplay (común en móviles sin interacción previa),
-           // podrías mostrar un mensaje al usuario pidiendo que interactúe
-           // o simplemente dejar que intente reproducir más tarde.
-           console.log("Autoplay de audio remoto bloqueado o fallido.");
-           document.getElementById('status').innerText = 'Audio remoto listo (puede requerir interacción para empezar)';
+           console.log("Usuario: Autoplay de audio remoto bloqueado o fallido.");
+           statusDisplay.innerText = 'Audio remoto listo (puede requerir interacción para empezar)';
         });
       };
 
+      // **LOGS ADICIONALES para ICE candidates**
       pc.onicecandidate = event => {
-        if (event.candidate) push(ref(db, `calls/${callRef.key}/callerCandidates`), event.candidate.toJSON());
+        if (event.candidate) {
+           console.log('Usuario: Candidato ICE generado:', event.candidate.type, event.candidate.candidate); // Log del tipo y contenido parcial del candidato
+           push(ref(db, `calls/${callRef.key}/callerCandidates`), event.candidate.toJSON())
+             .then(() => console.log('Usuario: Candidato ICE enviado a Firebase'))
+             .catch(e => console.error("Usuario: Error enviando ICE candidate a Firebase:", e));
+        } else {
+            console.log('Usuario: Fin de candidatos ICE (null candidate)');
+        }
       };
+
+      // **LOGS ADICIONALES para estado de ICE gathering**
+      pc.onicegatheringstatechange = () => {
+          console.log(`Usuario: ICE gathering state: ${pc.iceGatheringState}`);
+          if (pc.iceGatheringState === 'complete') {
+              console.log('Usuario: Recolección de candidatos ICE completa.');
+          }
+      };
+
 
       // Añadir listeners para el estado de la conexión
       pc.oniceconnectionstatechange = () => {
-          console.log(`ICE connection state: ${pc.iceConnectionState}`);
-          // Puedes actualizar el estado en la UI si quieres (opcional)
-          // document.getElementById('status').innerText = `ICE: ${pc.iceConnectionState}`;
+          console.log(`Usuario: ICE connection state: ${pc.iceConnectionState}`);
       };
 
        pc.onconnectionstatechange = () => {
-          console.log(`Connection state: ${pc.connectionState}`);
+          console.log(`Usuario: Connection state: ${pc.connectionState}`);
            if (pc.connectionState === 'connected') {
-               document.getElementById('status').innerText = 'Conectado';
-           } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-               document.getElementById('status').innerText = `Llamada terminada (${pc.connectionState})`;
-               // Limpiar recursos si es necesario
-               if (localStream) {
-                   localStream.getTracks().forEach(track => track.stop());
-               }
-               pc.close();
-               pc = null;
+               statusDisplay.innerText = 'Conectado';
+           } else if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+               handleCallEnd(`Llamada terminada (${pc.connectionState})`);
            } else {
-               document.getElementById('status').innerText = `Estado: ${pc.connectionState}`;
+               statusDisplay.innerText = `Estado: ${pc.connectionState}`;
            }
        };
 
 
-      // Crear llamada
+      // Crear llamada en Firebase
       callRef = push(ref(db, 'calls'));
-      await set(callRef, { status: 'waiting' });
+      console.log(`Usuario: Creando llamada con ID: ${callRef.key}`);
+      await set(callRef, { status: 'waiting' })
+        .then(() => console.log('Usuario: Estado de llamada "waiting" seteado en Firebase'))
+        .catch(e => console.error("Usuario: Error seteando estado waiting en Firebase:", e));
+
       // Limpiar el llamado de Firebase si la página se cierra o recarga
-      onDisconnect(callRef).remove();
+      onDisconnect(callRef).remove()
+         .then(() => console.log('Usuario: onDisconnect configurado para limpiar la llamada'))
+         .catch(e => console.error("Usuario: Error configurando onDisconnect:", e));
 
 
       // Crear y enviar oferta
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await set(ref(db, `calls/${callRef.key}/offer`), offer);
-      document.getElementById('status').innerText = 'Esperando admin...';
+      try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          console.log('Usuario: Oferta creada y seteada localmente.');
+          await set(ref(db, `calls/${callRef.key}/offer`), offer);
+           console.log('Usuario: Oferta enviada a Firebase.');
+           statusDisplay.innerText = 'Esperando admin...';
+      } catch (error) {
+          console.error("Usuario: Error al crear/enviar la oferta:", error);
+          handleCallEnd("Error al crear oferta"); // Considerar terminar la llamada si falla la oferta
+          return;
+      }
+
 
       // Recibir respuesta
       onValue(ref(db, `calls/${callRef.key}/answer`), async snap => {
         if (snap.exists() && !pc.currentRemoteDescription) {
-          await pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
-          // El estado "Conectado" ahora se actualiza en pc.onconnectionstatechange
+          console.log('Usuario: Respuesta recibida de Firebase.');
+          try {
+             await pc.setRemoteDescription(new RTCSessionDescription(snap.val()));
+             console.log('Usuario: Respuesta seteada remotamente.');
+             // El estado "Conectado" ahora se actualiza en pc.onconnectionstatechange
+          } catch (error) {
+              console.error("Usuario: Error al setear la respuesta remota:", error);
+              handleCallEnd("Error al procesar respuesta remota");
+          }
+        } else if (snap.exists() && pc.currentRemoteDescription) {
+            console.log('Usuario: Respuesta recibida pero remoteDescription ya existe.');
+        } else {
+             console.log('Usuario: Respuesta no existe (aún).');
         }
       });
 
       // Recibir candidatos ICE del admin
       onValue(ref(db, `calls/${callRef.key}/adminCandidates`), snap => {
-        snap.forEach(child => pc.addIceCandidate(new RTCIceCandidate(child.val())).catch(e => console.error("Error adding ICE candidate:", e))); // Añadido catch para errores en addIceCandidate
+        console.log('Usuario: Nuevos candidatos ICE del admin en Firebase.');
+        snap.forEach(child => {
+            const candidate = new RTCIceCandidate(child.val());
+            console.log('Usuario: Candidato ICE del admin recibido:', candidate.type, candidate.candidate); // Log del tipo y contenido
+            pc.addIceCandidate(candidate)
+              .then(() => console.log('Usuario: Candidato ICE del admin añadido con éxito.'))
+              .catch(e => console.error("Usuario: Error añadiendo ICE candidate del admin:", e)); // Añadido catch para errores en addIceCandidate
+        });
       });
     };
   </script>
